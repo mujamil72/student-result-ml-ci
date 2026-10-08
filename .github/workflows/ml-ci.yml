@@ -1,66 +1,68 @@
-name: Student Result ML CI-CD
+import unittest
 
-on:
-  push:
-    branches:
-      - main
+from app import app
 
-  pull_request:
-    branches:
-      - main
 
-  workflow_dispatch:
+class TestPredictionApplication(unittest.TestCase):
 
-permissions:
-  contents: read
+    def setUp(self):
+        self.client = app.test_client()
 
-jobs:
+    def test_health_endpoint(self):
+        response = self.client.get("/")
 
-  train-test-deliver:
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["status"], "ok")
 
-    runs-on: ubuntu-latest
+    def test_high_performance_prediction(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "attendance": 90,
+                "internal_marks": 85,
+                "assignment_marks": 88,
+                "previous_score": 80
+            }
+        )
 
-    steps:
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["prediction"],
+            "PASS"
+        )
 
-      - name: Checkout repository
-        uses: actions/checkout@v7
+    def test_low_performance_prediction(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "attendance": 55,
+                "internal_marks": 30,
+                "assignment_marks": 40,
+                "previous_score": 35
+            }
+        )
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.11'
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["prediction"],
+            "FAIL"
+        )
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+    def test_missing_field_validation(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "attendance": 90,
+                "internal_marks": 85
+            }
+        )
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "missing_fields",
+            response.get_json()
+        )
 
-      - name: Train student result model
-        run: python train_model.py
 
-      - name: Check ML quality gate
-        run: python quality_gate.py
-
-      - name: Run automated ML tests
-        run: python -m unittest test_ml_pipeline.py -v
-
-      - name: Run prediction application tests
-        run: python -m unittest test_app.py -v
-
-      - name: Prepare release candidate
-        run: |
-          mkdir -p release_candidate
-          cp app.py release_candidate/
-          cp student_result_model.pkl release_candidate/
-          cp metrics.json release_candidate/
-          cp requirements.txt release_candidate/
-          printf "Student Result Prediction ML Application\nRun: python app.py\nEndpoint: POST /predict\n" > release_candidate/DEPLOYMENT.txt
-
-      - name: Upload release candidate
-        uses: actions/upload-artifact@v4
-        with:
-          name: student-result-ml-release
-          path: release_candidate/
-          if-no-files-found: error
-          retention-days: 7
+if __name__ == "__main__":
+    unittest.main()
