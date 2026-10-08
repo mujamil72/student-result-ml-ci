@@ -90,6 +90,19 @@ jobs:
         if: always()
         run: docker rm -f student-result-ml-container || true
 
-      - name: Prepare release candidate
-        run: |
-          mkdir -p
+      - name: Create release folder
+        run: mkdir -p release_candidate
+
+      - name: Copy release files
+        run: cp app.py student_result_model.pkl metrics.json requirements.txt Dockerfile .dockerignore release_candidate/
+
+      - name: Create deployment note
+        run: printf "Student Result Prediction ML Application\nRun - python app.py\nEndpoint - POST /predict\n" > release_candidate/DEPLOYMENT.txt
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: student-result-ml-release
+          path: release_candidate/
+          if-no-files-found: error
+          retention-days: 7
